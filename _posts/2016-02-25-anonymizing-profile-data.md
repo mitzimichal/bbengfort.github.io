@@ -7,23 +7,23 @@ categories: programmer
 
 > This post is an early draft of expanded work that will eventually appear on the [District Data Labs Blog](http://blog.districtdatalabs.com/). Your feedback is welcome, and you can submit your comments on the [draft GitHub issue](https://github.com/bbengfort/bbengfort.github.io/issues/3).
 
-In order to learn (or teach) data science you need data (surprise!). The best libraries often come with a toy dataset to show examples and how the code works. However, nothing can replace an actual, non-trivial dataset for a tutorial or lesson because it provides for deep and meaningful further exploration. Non-trivial datasets can provide surprise and intuition in a way that toy datasets just cannot. Unfortunately, non-trivial datasets can be hard to find for a few reasons, but one common reason is that the dataset contains personally identifying information (PII).
+In order to learn (or teach) data science you need data (surprise!). The best libraries often come with a toy dataset to show examples and how the code works. However, in a learning environment nothing can replace an actual, non-trivial dataset because it provides for deep and meaningful further exploration. Unfortunately, non-trivial datasets can be hard to find for a few reasons, but one common reason is that the dataset contains personally identifying information (PII).
 
-A possible solution to dealing with PII is to _anonymize_<sup><small>[1](#apd-footnote-1)</small></sup> the data set by replacing information that can identify a real individual with information about a fake (but similarly behaving) fake individual. Unfortunately this is not as easy at it sounds at a glance. A simple mapping of real data to randomized data is not enough because anonymization needs to preserve the semantics of the dataset in order to be used as a stand in for analytical purposes. As a result, issues related to _entity resolution_<sup><small>[2](#apd-footnote-2)</small></sup> like managing duplicates or producing linkable results come into play.
+A possible solution to dealing with PII is to _anonymize_<sup><small>[1](#apd-footnote-1)</small></sup> the dataset by replacing information that can identify a real individual with information about a similarly behaving fake individual. Unfortunately this is not as easy as it sounds. A simple mapping of real data to randomized data is not enough because in order to be used as a stand in for analytical purposes, anonymization needs to preserve the semantics of the original data. As a result, issues related to _entity resolution_<sup><small>[2](#apd-footnote-2)</small></sup> like managing duplicates or producing linkable results come into play.
 
-The good news is that we can take a cue from the database community, who routinely _generate_ data sets in order to evaluate the performance of a database system. This community, especially in a web or test driven development context, has a lot of tools for generating very realistic data for a variety of information types. For this post, I'll explore using the [Faker](https://github.com/joke2k/faker) library to generate a realistic, anonymized dataset that can be utilized for downstream analysis.
+The good news is that we can take a cue from the database community, who routinely _generate_ data sets in order to evaluate the performance of a database system. This community has plenty of tools for generating realistic data for a variety of information types. For this post, I'll explore using the [Faker](https://github.com/joke2k/faker) library to generate a realistic, anonymized dataset that can be utilized for downstream analysis.
 
-The goal can therefore be summarized as follows: given a target dataset (let's say for simplicity, a CSV file with multiple columns), produce a new dataset such that for each row in the target, the anonymized dataset does not contain any personally identifying information. The anonymized dataset should have the same amount of data, as well as maintain its value for analysis.
+The goal: given a target dataset (for example, a CSV file with multiple columns), produce a new dataset such that for each row in the target, the anonymized dataset does not contain any personally identifying information. The anonymized dataset should have the same amount of data, as well as maintain its value for analysis.
 
 ## Anonymizing CSV Data
 
-In this example we're going to do something very simple, we're going to anonymize only two fields: full name and email. Sounds easy, right? The issue is that we want to preserve the semantic relationships and patterns in our target dataset so that we can hand it off to be analyzed or mined for interesting patterns. What happens if there are multiple rows per user? Since CSV data is naturally denormalized (e.g. contains redundant data like rows with repeated full names and emails) we will need to maintain a mapping of profile information.
+In this simple example we're going to anonymize only two fields: full name and email. Sounds easy, right? The difficulty is in preserving the semantic relationships and patterns in our target dataset so that we can hand it off to be analyzed or mined for interesting patterns. What happens if there are multiple rows per user? Since CSV data is naturally denormalized (e.g. contains redundant data like rows with repeated full names and emails) we need to maintain a mapping of profile information.
 
 **Note**: Since we're going to be using Python 2.7 in this example, you'll need to install the `unicodecsv` module with `pip`. Additionally you'll need the Faker library:
 
     $ pip install fake-factory unicodecsv
 
-The following example shows a simple `anonymize_rows` function that maintains this mapping and also shows how to generate data with Faker. We'll also go a step further and read the data from a source CSV file and write the anonymized data to a target CSV file. The end result is that the file should be very similar in terms of length, row order, and fields, the only difference being that names and emails have been replaced with fake names and emails.
+The following example shows a simple `anonymize_rows` function that maintains this mapping and shows how to generate data with Faker. We'll go a step further and read the data from a source CSV file and write the anonymized data to a target CSV file. The end result is files that are very similar in terms of length, row order, and fields, the only difference being that names and emails have been replaced with fake names and emails.
 
 ```python
 import unicodecsv as csv
@@ -69,9 +69,9 @@ def anonymize(source, target):
 
 ```
 
-The entry point for this code is the `anonymize` function itself. It takes as input the path to two files: the `source`, where the target data is held in CSV form, and `target` a path to write out the anonymized data to. Both of these paths are opened for reading and writing respectively, then the `unicodecsv` module is used to read and parse each row, transforming them into Python dictionaries. Those dictionaries are passed into the `anonymize_rows` function, which transforms and `yields` each row to be written by the CSV writer to disk.
+The entry point for this code is the `anonymize` function itself. It takes as input the path to two files: the `source`, where the original data is held in CSV form, and `target` a path to write out the anonymized data to. Both of these paths are opened for reading and writing respectively. The `unicodecsv` module is used to read and parse each row, transforming them into Python dictionaries. Those dictionaries are passed into the `anonymize_rows` function, which transforms and `yields` each row to be written by the CSV writer to disk.
 
-The `anonymize_rows` function takes any iterable of dictionaries which contain `name` and `email` keys. It loads the fake factory using `Factory.create` - a class function that loads various providers with methods that generate fake data (more on this later). We then create two `defaultdict` to map names to fake names and emails to fake emails.
+The `anonymize_rows` function takes any iterable dictionaries which contain `name` and `email` keys. It loads the fake factory using `Factory.create` - a class function that loads various providers with methods that generate fake data (more on this later). We then create two `defaultdict` to map names to fake names and emails to fake emails.
 
 The Python `collections` module provides the `defaultdict` which is similar to a regular `dict` except that if the key does not exist in the dictionary, a default value is supplied by the callable passed in at instantiation. For example, `d = defaultdict(int)` would provide a default value of 0 for every key not already in the dictionary. Therefore when we use `defaultdict(faker.name)` we're saying that for every key not in the dictionary, create a fake name (and similar for email). This allows us to generate a mapping of real data to fake data, and make sure that the real value always maps to the same fake value.
 
@@ -96,7 +96,7 @@ We now have a new wrangling tool in our toolbox that will allow us to transform 
 
 ### Generating Fake Data
 
-There are two third party libraries for generating fake data with Python that come up on Google search results: [Faker](https://pypi.python.org/pypi/Faker) by [@deepthawtz](https://github.com/deepthawtz) and [Fake Factory](https://pypi.python.org/pypi/fake-factory) by [@joke2k](https://github.com/joke2k), which is also called &ldquo;Faker&rdquo;. Faker provides anonymization for user profile data, which is completely generated on a per-instance basis. Fake Factory (used in the example above) uses a providers approach to load many different fake data generators in multiple languages. Because Fake Factory has multiple language support, and a wider array of fake data generators, I typically use it over the more intuitive and simple to use Faker library which only does fake user profiles and we'll inspect it in detail for the rest of this post (everywhere except in this paragraph, when I refer to Faker, I'm referring to Fake Factory).
+There are two third party libraries for generating fake data with Python that come up on Google search results: [Faker](https://pypi.python.org/pypi/Faker) by [@deepthawtz](https://github.com/deepthawtz) and [Fake Factory](https://pypi.python.org/pypi/fake-factory) by [@joke2k](https://github.com/joke2k), which is also called &ldquo;Faker&rdquo;. Faker provides anonymization for user profile data, which is completely generated on a per-instance basis. Fake Factory (used in the example above) uses a providers approach to load many different fake data generators in multiple languages. I typically prefer Fake Factory over Faker because it has multiple language support and a wider array of fake data generators. Next we'll explore Fake Factory in detail (for the rest of this post, when I refer to Faker, I'm referring to Fake Factory).
 
 The primary interface that Faker provides is called a `Generator`. Generators are a collection of `Provider` instances which are responsible for formatting random data for a particular domain. Generators also provide a wrapper around the `random` module, and allow you to set the random seed and other operations. While you could theoretically instantiate your own Generator with your own providers, Faker provides a `Factory` to automatically load all the providers on your behalf:
 
@@ -105,34 +105,7 @@ The primary interface that Faker provides is called a `Generator`. Generators ar
 >>> fake = Factory.create()
 ```
 
-If you inspect the `fake` object, you'll see around 158 methods (at the time of this writing) that all generate fake data. Please allow me to highlight a few:
-
-```python
->>> fake.credit_card_number()
-u'180029425031151'
-```
-
-```python
->>> fake.military_ship()
-u'USCGC'
-```
-
-```python
->>> (fake.latitude(), fake.longitude())
-(Decimal('-39.4682475'), Decimal('50.449170'))
-```
-
-```python
->>> fake.hex_color()
-u'#559135'
-```
-
-```python
->>> fake.pyset(3)
-set([u'Et possimus.', u'Blanditiis vero.', u'Ad odio ad qui.', 9855])
-```
-
-Importantly, providers can also be localized using a language code; and this is probably the best reason to use the `Factory` object &mdash; to ensure that localized providers, or subsets of providers are loaded correctly. For example, to load the French localization:
+If you inspect the `fake` object, you'll see around 158 methods (at the time of this writing) to generate fake data. Importantly, providers can also be localized using a language code; and this is probably the best reason to use the `Factory` object &mdash; to ensure that localized providers, or subsets of providers are loaded correctly. For example, to load the French localization:
 
 ```python
 >>> fake = Factory.create('fr_FR')
@@ -148,43 +121,13 @@ And for fun, some Chinese:
 u"快讯科技有限公司"
 ```
 
-As you can see there are a wide variety of tools and techniques to generate fake data from a variety of domains. The best way to explore all the providers in detail is simply to look at the [providers package on GitHub](https://github.com/joke2k/faker/tree/master/faker/providers).
+As you can see there are a wide variety of tools and techniques to generate fake data from a variety of domains. The best way to explore all the providers in detail is simply to look at the [providers package on GitHub](https://github.com/joke2k/faker/tree/master/faker/providers). 
 
-### Creating A Provider
-
-Although the Faker library has a very comprehensive array of providers, occasionally you need a domain specific fake data generator. In order to add a custom provider, you will need to subclass the `BaseProvider` and expose custom fake methods as class methods using the `@classmethod` decorator. One very easy approach is to create a set of random data you'd like to expose, and simply randomly select it:
-
-```python
-from faker.providers import BaseProvider
-
-class OceanProvider(BaseProvider):
-
-    __provider__ = "ocean"
-    __lang__     = "en_US"
-
-    oceans = [
-        u'Atlantic', u'Pacific', u'Indian', u'Arctic', u'Southern',
-    ]
-
-    @classmethod
-    def ocean(cls):
-        return cls.random_element(cls.oceans)
-```
-
-In order to change the likelihood or distribution of which oceans are selected, simply add duplicates to the `oceans` list so that each name has the probability of selection that you'd like. Then add your provider to the `Faker` object:
-
-```python
->>> fake = Factory.create()
->>> fake.add_provider(OceanProvider)
->>> fake.ocean()
-u'Indian'
-```
-
-In routine data wrangling operations, you may create a package structure with localization similar to how Faker is organized and load things on demand. Don't forget &mdash; if you come up with a generic provider that may be useful to many people, submit it back as a pull request!
+You can also create a custom provider. You will need to subclass the `BaseProvider` and expose custom fake methods as class methods using the `@classmethod` decorator. In routine data wrangling operations, you may create a package structure with localization similar to how Faker is organized and load things on demand. Don't forget &mdash; if you come up with a generic provider that may be useful to many people, submit it back as a pull request!
 
 ## Maintaining Data Quality
 
-Now that we understand the wide variety of fake data we can generate, let's get back to our original example of creating user profile data of just name and email address. First, if you look at the results in the section above, we can make a few observations:
+Now that we understand the wide variety of fake data we can generate, let's get back to our original example of creating user profile data of just name and email address. First, if you look at the results in the Anonymizing section above, we can make a few observations:
 
 - **Pro**: exact duplicates of name and email are maintained via the mapping.
 - **Pro**: our user profiles are now fake data and PII is protected.
@@ -192,7 +135,7 @@ Now that we understand the wide variety of fake data we can generate, let's get 
 - **Con**: fuzzy duplicates (e.g. J. Smith vs. John Smith) are blown away.
 - **Con**: all the domains are "free email" like Yahoo and Gmail.
 
-Basically we want to improve our user profile to include email addresses that are similar to the names (or a non-name based username), and we want to ensure that the domains are a bit more realistic for work addresses. We also want to include aliases, nicknames, or different versions of the name. Faker does provide a profile provider:
+Basically we want to improve our user profile to include email addresses that are similar to the names (or a non-name based username), and we want to ensure that the domains are a bit more realistic for work addresses. We also want to include aliases, nicknames, or different versions of the name. Faker does include a profile provider:
 
 ```python
 >>> fake.simple_profile()
@@ -206,13 +149,13 @@ u'{
 }'
 ```
 
-But as you can see, it suffers from the same problem. In this section, we'll explore different techniques that allow us to pass over the data and modify our fake data generation such that it matches the distributions we're seeing in the original data set. In particular we'll deal with the domain, creating more realistic fake profiles, and adding duplicates to our data set with fuzzy matching.
+But as you can see, it suffers from the same problem. In this section, we'll explore different techniques that allow us to modify our fake data generation such that it matches the distributions we're seeing in the original data set. In particular we'll deal with the domain, creating more realistic fake profiles, and adding duplicates to our dataset with fuzzy matching.
 
 ### Domain Distribution
 
 One idea to maintain the distribution of domains is to do a first pass over the data and create a mapping of real domain to fake domain. Moreover, many domains like gmail.com can be whitelisted and mapped directly to itself (we just need a fake username). Additionally, we can also preserve capitalization and spelling via this method, e.g. &ldquo;Gmail.com&rdquo; and &ldquo;GMAIL.com&rdquo; which might be important for data sets that have been entered by hand.
 
-In order to create the domain mapping/whitelist, we'll need to create an object that can load a whitelist from disk, or generate one from our original dataset. I propose the following utility:
+In order to create the domain mapping/whitelist, we'll need to create an object that can load a whitelist from disk, or generate one from our original dataset. For example:
 
 ```python
 import csv
@@ -310,11 +253,11 @@ class DomainMapping(MutableMapping):
             yield key
 ```
 
-Right so that's quite a lot of code all at once, so let's break it down a bit. First, the class extends `MutableMapping` which is an abstract base class in the `collections` module. The ABC gives us the ability to make this class act just like a `dict` object. All we have to do is provide `__getitem__`, `__setitem__`, `__delitem__`, and `__iter__` methods and all other dictionary methods like `pop`, or `values` work on our behalf. Here, we're just wrapping an inner dictionary called `domains`.
+That's quite a lot of code all at once, so let's break it down a bit. First, the class extends `MutableMapping` which is an abstract base class in the `collections` module. The ABC gives us the ability to make this class act just like a `dict` object. All we have to do is provide `__getitem__`, `__setitem__`, `__delitem__`, and `__iter__` methods and all other dictionary methods like `pop`, or `values` work on our behalf. Here, we're just wrapping an inner dictionary called `domains`.
 
-The thing to note about our `__getitem__` method is that it acts very similar to a `defaultdict`, that is if you try to fetch a key that is not in the mapping, then it generates fake data on your behalf. This way, any domains that we don't have in our whitelist or mapping will automatically be anonymized.
+The thing to note about our `__getitem__` method is that it acts very similar to a `defaultdict`, that is if you try to fetch a key that is not in the mapping, it generates fake data on your behalf. This way, any domains that we don't have in our whitelist or mapping will automatically be anonymized.
 
-Next, we want to be able to `load` and `dump` this data to a JSON file on disk, that way we can maintain our mapping between anonymization runs. The `load` method is fairly straight forward, it just takes an open file-like object and parses it uses the `json` module, and instantiates the domain mapping and returns it. The `dump` method is a bit more complex, it has to break down the whitelist and mapping into separate objects, so that we can easily modify the data on disk if needed. Together, these methods will allow you to load and save your mapping into a JSON file that will look similar to:
+Next, we want to be able to `load` and `dump` this data to a JSON file on disk, that way we can maintain our mapping between anonymization runs. The `load` method is fairly straight forward: it takes an open file-like object, parses it using the `json` module, instantiates the domain mapping, and returns it. The `dump` method is a bit more complex, it has to break down the whitelist and mapping into separate objects, so that we can easily modify the data on disk if needed. Together, these methods will allow you to load and save your mapping into a JSON file that will look similar to:
 
 ```json
 {
@@ -336,7 +279,7 @@ The final method of note is the `generate` method. The generate method allows yo
 [y/n/q] >
 ```
 
-Note that the prompt includes a progress indicator (this is prompt 1 of 245) as well as a method to quit early. This is especially important for large datasets that have a lot of single domains; if you quit, the domains will still be faked, and the user only sees the most frequent examples for whitelisting. The idea behind this mechanism to read through your CSV once, generate the whitelist, then save it to disk so that you can use it for anonymization on a routine basis. Moreover, you can modify domains in the JSON file to better match any semantics you might have (e.g. include .edu or .gov domains, which are not generated by the internet provider in Faker).
+Note that the prompt includes a progress indicator (this is prompt 1 of 245) as well as a method to quit early. This is especially important for large datasets that have a lot of unique domains; if you quit, the domains will still be faked, and the user only sees the most frequent examples for whitelisting. The idea behind this mechanism is to read through your CSV once, generate the whitelist, then save it to disk so you can use it for anonymization on a routine basis. Moreover, you can modify domains in the JSON file to better match any semantics you might have (e.g. include .edu or .gov domains, which are not generated by the internet provider in Faker).
 
 ### Realistic Profiles
 
@@ -351,7 +294,7 @@ class Profile(object):
 
     def fuzzy_profile(self, name=None, email=None):
         """
-        Return an profile that allows for fuzzy names and emails.
+        Return a profile that allows for fuzzy names and emails.
         """
         parts = self.fuzzy_name_parts()
         return {
@@ -371,7 +314,7 @@ class Profile(object):
 
     def fuzzy_name(self, parts, name=None):
         """
-        Creates a name that has similar case to the passed in name.
+        Creates a name that has a similar case to the passed in name.
         """
         # Extract the first, initial, and last name from the parts.
         first, middle, last = parts
@@ -430,9 +373,9 @@ class Profile(object):
         return u"{}@{}".format(username, domain)
 ```
 
-Again, this is a lot of code, make sure you go through it carefully so you understand what is happening. First off, a profile in this case is the combination of a mapping of names to fake names and emails to fake emails. The key is that the names and emails are related to original data somehow. In this case, the relationship is through case such that "DANIEL WEBSTER" is faked to "JAKOB WILCOTT" instead of to "Jakob Wilcott". Additionally through our domain mapping, we also maintain the relationship of the original email domain to the fake domain mapping, e.g. everyone with the an email domain "@districtdatalabs.com" will be mapped to the same fake domain.
+Again, this is a lot of code, make sure you go through it carefully so you understand what is happening. First off, a profile in this case is the combination of mapping names to fake names and emails to fake emails. The key is that the names and emails are related to the original data somehow. In this case, the relationship is through case such that "DANIEL WEBSTER" is faked to "JAKOB WILCOTT" instead of to "Jakob Wilcott". Additionally through our domain mapping, we also maintain the relationship of the original email domain to the fake domain mapping, e.g. everyone with the email domain "@districtdatalabs.com" will be mapped to the same fake domain.
 
-In order to maintain the relationship of names to emails (which is very common), we need to be able to access the name more directly. In this case we have a name parts generator which generates fake first, middle, and last names. We then randomly generate names of the form "first last", "first middle last", or "first i. last" with random chance. Additionally the email can take a variety of forms based on the name parts as well. Now we get slightly more realistic profiles:
+In order to maintain the relationship of names to emails (which is very common), we need to be able to access the name more directly. In this case we have a name parts generator which generates fake first, middle, and last names. We then randomly generate names of the form "first last", "first middle last", or "first i. last". The email can take a variety of forms based on the name parts as well. Now we get slightly more realistic profiles:
 
 ```python
 >>> fake.fuzzy_profile()
@@ -450,13 +393,13 @@ Importantly this profile object makes it easy to map multiple names and emails t
 
 ### Fuzzing Fake Names from Duplicates
 
-If you noticed in our original data set we had the situation where we had a clear entity duplication: same email, but different names. In fact, the second name was simply the first initial and last name but you could imagine other situations like nicknames ("Bill" instead of "William"), or having both work and personal emails in the dataset. The fuzzy profile objects we generated in the last section allow us to maintain a mapping of all name parts to generated fake names, but we need some way to be able to detect duplicates and combine their profile: enter the `fuzzywuzzy` module.
+If you noticed in our original data set we had a clear entity duplication: same email, but different names. In fact, the second name was simply the first initial and last name but you could imagine other situations like nicknames ("Bill" instead of "William"), or having both work and personal emails in the dataset. The fuzzy profile objects we generated in the last section allow us to maintain a mapping of all name parts to generated fake names, but we need some way to be able to detect duplicates and combine their profile: enter the `fuzzywuzzy` module.
 
     $ pip install fuzzywuzzy python-Levenshtein
 
-Similar to how we did the domain mapping, we're going to pass through the entire dataset and look for similar name, email pairs and propose them to the user. If the user thinks they're duplicates, then we'll merge them together into a single profile, and use the mappings as we anonymize. Although I won't go through an entire object to do this as with the domain map, this is also something you can save to disk and load on demand for multiple anonymization passes and to include user based edits.
+Similar to our domain mapping approach, we're going to pass through the entire dataset and look for similar name-email pairs and propose them to the user. If the user thinks they're duplicates, then we'll merge them into a single profile, and use the mappings as we anonymize. This is also something you can save to disk and load on demand for multiple anonymization passes and to include user based edits.
 
-The first step is to get pairs, and eliminate exact duplicates. To do this we'll create a hashable data structure for our profiles using a `namedtuple`.
+The first step is to get pairs and eliminate exact duplicates. To do this we'll create a hashable data structure for our profiles using a `namedtuple`.
 
 ```python
 from collections import namedtuple
@@ -530,17 +473,17 @@ The fuzzing process will go through your entire dataset, and create pairs of peo
 
 ## Conclusion
 
-Anonymization of datasets is a critical method to promote the exploration and practice of data science through open data. Fake data generators that already exist give us the opportunity to ensure that private data is obfuscated. This issue becomes how to leverage these fake data generators while still maintaining a high quality dataset with semantic relations preserved for further analysis. As we've seen throughout the post, even just the anonymization of just two fields, name and email can lead to potential problems.
+Anonymization of datasets is a critical method to promote the exploration and practice of data science through open data. Fake data generators that already exist give us the opportunity to ensure that private data is obfuscated. The issue becomes how to leverage these fake data generators while still maintaining and preserving a high quality dataset with semantic relations for further analysis. As we've seen throughout the post, even the anonymization of just two fields, name and email can lead to potential problems.
 
 This problem, and the code in this post are associated with a real case study. For District Data Labs' Entity Resolution Research Lab<sup><small>[3](#apd-footnote-3)</small></sup> I wanted to create a dataset that removed PII of DDL members while maintaining duplicates and structure to study entity resolution. The source dataset was 1,343 records in CSV form and contained name and emails that I wanted to anonymize.
 
-Using the strategy I mentioned for domain name mapping, the dataset contained 245 distinct domain names, 185 of which were hapax legomena (appeared only once). There was a definite long tail, as the first 20 or so most frequent domains were the majority of the records. Once I generated the whitelist as above, I manually edited the mappings to ensure that there were no duplicates and that major work domains were &ldquo;professional enough&rdquo;.
+Using the strategy I mentioned for domain name mapping, the dataset contained 245 distinct domain names, 185 of which appeared only once. There was a definite long tail, as the first 20 or so most frequent domains were the majority of the records. Once I generated the whitelist as described above, I manually edited the mappings to ensure that there were no duplicates and that major work domains were &ldquo;professional enough&rdquo;.
 
 Using the fuzzy matching process was also a bear. It took on average, 28 seconds to compute the pairwise scores. Using a threshold score of 50, I was proposed 5,110 duplicates (out of a possible 901,153 combinations). I went through 354 entries (until the score was below 65) and was satisfied that I covered many of the duplicates in the dataset.
 
-In the end the dataset that I anonymized was of a high quality. It obfuscated personally identifying information like name and email and I'm happy to make the data set public. Of course, you could reverse the some of the information in the dataset. For example, I'm listed in the dataset, and one of the records indicates a relationship between a fake user and a blog post, which I'm on record as having written. However, even though you can figure out who I am and what else I've done in the dataset, you wouldn't be able to use it to extract my email address, which was the goal.
+The resulting anonymized dataset was of a high quality and obfuscated personally identifying information like name and email. Of course, you could reverse some of the information in the dataset. For example, I'm listed in the dataset, and one of the records indicates a relationship between a fake user and a blog post, which I'm on record as having written. However, even though you can figure out who I am and what else I've done in the dataset, you wouldn't be able to use it to extract my email address, which was the goal.
 
-In the end, anonymizing a dataset is a lot of work, with a lot of gotchas and hoops to jump through. However, I hope you will agree that it is invaluable in an open data context. By sharing data, resources, and tools we can use many eyes to provide multiple insights and to drive data science forward.
+In the end, eventhough anonymizing a dataset is a lot of work, it is invaluable in an open data context. By sharing data, resources, and tools we can use many eyes to provide multiple insights and to drive data science forward.
 
 ### Footnotes
 
